@@ -53,13 +53,10 @@ def scrape_vietlott():
                 special_num = numbers[6] # The 7th ball is special_number
             
             # Find draw date
+            import re
             header_text = soup.find('h4').text if soup.find('h4') else ""
-            date_str = ""
-            if "NGÀY:" in header_text:
-                date_str = header_text.split("NGÀY:")[1].split()[0].strip()
-            
-            if not date_str:
-                date_str = datetime.now().strftime("%d/%m/%Y")
+            date_match = re.search(r'(\d{2}/\d{2}/\d{4})', header_text)
+            date_str = date_match.group(1) if date_match else datetime.now().strftime("%d/%m/%Y")
 
             save_draw_result(game_type, draw_id, main_numbers, date_str, special_number=special_num)
             print(f"Saved {game_type} #{draw_id}: {main_numbers} (Bonus: {special_num}) on {date_str}")
