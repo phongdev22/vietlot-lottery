@@ -10,3 +10,4 @@ gunicorn
 matplotlib
 scikit-learn
 apscheduler
+certifi

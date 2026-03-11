@@ -28,5 +28,11 @@ jobs:
         # stop the build if there are Python syntax errors or undefined names
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
         
+    - name: Create .env file for Docker
+      run: |
+        echo "MONGO_URI=${{ secrets.MONGO_URI }}" >> .env
+        echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
+        echo "FLASK_SECRET=${{ secrets.FLASK_SECRET }}" >> .env
+        
     - name: Build Docker Image
       run: docker build . -t vietlott-pro:latest

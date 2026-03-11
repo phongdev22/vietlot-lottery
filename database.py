@@ -1,4 +1,5 @@
 import os
+import certifi
 from datetime import datetime
 from pymongo import MongoClient
 from dotenv import load_dotenv
@@ -6,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 MONGO_URI = os.getenv("MONGO_URI")
-client = MongoClient(MONGO_URI)
+client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
 db = client['lottery_db']
 
 # Collections
