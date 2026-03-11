@@ -1,6 +1,7 @@
 flask
 flask-login
 pymongo[srv]
+dnspython
 python-telegram-bot
 python-dotenv
 requests

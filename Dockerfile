@@ -11,4 +11,4 @@ COPY . .
 ENV PYTHONUNBUFFERED=1
 
 # Script to run both Flask and Telegram Bot in parallel
-CMD ["sh", "-c", "python crawler.py && (python app.py & python bot.py)"]
+CMD ["sh", "-c", "python crawler.py & python app.py & python bot.py"]
