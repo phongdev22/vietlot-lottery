@@ -31,5 +31,24 @@ jobs:
         echo "TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}" >> .env
         echo "FLASK_SECRET=${{ secrets.FLASK_SECRET }}" >> .env
         
-    - name: Build Docker Image
+    - name: Build Docker Image (Local Check)
       run: docker build . -t vietlott-pro:latest
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - name: Install Koyeb CLI
+      run: |
+        curl -fsSL https://raw.githubusercontent.com/koyeb/koyeb-community/master/install.sh | sh
+        echo "$HOME/.koyeb/bin" >> $GITHUB_PATH
+
+    - name: Redeploy to Koyeb
+      env:
+        KOYEB_TOKEN: ${{ secrets.KOYEB_TOKEN }}
+      run: |
+        # Chờ 1 chút để đảm bảo GitHub đồng bộ code xong
+        sleep 5
+        # Thay 'vietlott-pro' và 'lottery-service' bằng tên App và Service của Đại ca trên Koyeb
+        # Nếu Đại ca chưa tạo, nó sẽ báo lỗi, nhưng nếu tạo rồi thì lệnh này sẽ ép nó deploy bản mới nhất
+        koyeb service redeploy vietlott-pro/lottery-service
