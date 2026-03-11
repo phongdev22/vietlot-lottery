@@ -2,8 +2,8 @@ from flask import Flask, render_template, jsonify, request, redirect, url_for, f
 import os
 from dotenv import load_dotenv
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from database import get_all_history, get_latest_draw, get_config, update_config, save_draw_result, get_unpushed_tickets, mark_ticket_checked
-from analytics import calculate_stats
+from database import get_all_history, get_latest_draw, get_config, update_config, save_draw_result, get_unpushed_tickets, mark_ticket_checked, get_prediction
+from analytics import calculate_stats, get_complex_stats
 from apscheduler.schedulers.background import BackgroundScheduler
 import requests
 from bs4 import BeautifulSoup
