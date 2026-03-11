@@ -2,12 +2,14 @@ from flask import Flask, render_template, jsonify, request, redirect, url_for, f
 import os
 from dotenv import load_dotenv
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from database import get_all_history, get_latest_draw, get_config, update_config, save_draw_result, get_unpushed_tickets, mark_ticket_checked, get_prediction
+from database import get_all_history, get_latest_draw, get_config, update_config, save_draw_result, get_unpushed_tickets, mark_ticket_checked, get_prediction, draw_history
 from analytics import calculate_stats, get_complex_stats
 from apscheduler.schedulers.background import BackgroundScheduler
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
+import time
+import re
 
 load_dotenv()
 
@@ -87,7 +89,7 @@ def check_results_job():
                 alert_msg = f"🎊 <b>ĐẠI CA TRÚNG GIẢI RỒI!!!</b> 🎊\n\n"
                 alert_msg += f"🎰 Loại vé: {ticket['game_type']}\n"
                 alert_msg += f"🏆 Giải: <b>{win_type}</b>\n"
-                alert_msg += f"💰 Tiền thưởng: <b>{prize:, if isinstance(prize, int) else prize}đ</b>\n"
+                alert_msg += f"💰 Tiền thưởng: <b>{f'{prize:,}' if isinstance(prize, int) else prize}đ</b>\n"
                 alert_msg += f"🔢 Bộ số của Đại ca: {', '.join(map(str, ticket['numbers']))}\n"
                 alert_msg += f"✨ Kết quả kỳ này: {', '.join(map(str, latest['numbers']))}"
                 if latest.get('special_number'):
@@ -201,4 +203,6 @@ def stats_page():
                           next_id_45=next_id_45)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    # Koyeb cung cấp biến PORT tự động, mình nên dùng nó để linh hoạt
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
