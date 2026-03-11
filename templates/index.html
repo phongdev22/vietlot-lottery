@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vietlott Pro Dashboard | AI Predictions</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #ff3e3e;
+            --secondary: #ffb800;
+            --accent: #7000ff;
+            --bg: #03040a;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text: #ffffff;
+            --text-dim: rgba(255, 255, 255, 0.5);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(circle at 0% 0%, rgba(255, 62, 62, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 100% 100%, rgba(112, 0, 255, 0.1) 0%, transparent 40%),
+                radial-gradient(circle at 50% 50%, rgba(255, 184, 0, 0.05) 0%, transparent 60%);
+            background-attachment: fixed;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 50px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .logo {
+            font-size: 1.8rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff 0%, #aaa 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -1px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px border rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 30px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+            border-color: rgba(255, 62, 62, 0.3);
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .game-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 25px;
+        }
+
+        .badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: var(--primary);
+        }
+
+        .badge.mega { background: #0066ff; }
+
+        .numbers {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+
+        .ball {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            color: #1a1a1a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 1.1rem;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .ball.hot { background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%); }
+
+        .stats-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .stats-table th, .stats-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .stats-table th {
+            color: var(--text-dim);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+        }
+
+        .status-win { color: #00ff88; font-weight: 600; }
+        .status-lose { color: var(--primary); }
+        .status-pending { color: var(--secondary); }
+
+        .stats-row {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .stats-label {
+            color: var(--text-dim);
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+        }
+
+        .hot-list {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .mini-ball {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .footer {
+            margin-top: 80px;
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 0.9rem;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .ai-badge {
+            background: linear-gradient(45deg, #00f2fe, #4facfe);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 8px;
+            font-size: 0.7rem;
+            margin-left: 10px;
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">VIETLOTT PRO</div>
+            <div style="display: flex; align-items: center; gap: 20px;">
+                <a href="/stats" style="color: var(--secondary); text-decoration: none; font-weight: 600; font-size: 0.9rem; border: 1px solid var(--secondary); padding: 5px 15px; border-radius: 12px;">📈 Thống kê & Dự đoán</a>
+                <div style="color: var(--text-dim)">Trình quản lý & Phân tích AI</div>
+                <a href="/logout" style="color: var(--primary); text-decoration: none; font-weight: 600; font-size: 0.9rem; border: 1px solid var(--primary); padding: 5px 15px; border-radius: 12px;">Đăng xuất</a>
+            </div>
+        </header>
+
+        <div class="card" style="margin-bottom: 40px; border-color: rgba(255, 184, 0, 0.2);">
+            <h2 style="color: var(--secondary)">⚙️ Cấu hình hệ thống</h2>
+            <form action="/settings" method="POST" style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+                <div>
+                    <label style="font-size: 0.9rem; color: var(--text-dim)">Số vé tối đa mỗi ngày:</label><br>
+                    <input type="number" name="daily_limit" value="{{ config.daily_limit }}" style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 8px 12px; border-radius: 8px; width: 100px; margin-top: 5px;">
+                </div>
+                <button type="submit" style="background: var(--secondary); color: #000; border: none; padding: 10px 25px; border-radius: 12px; font-weight: 600; cursor: pointer; margin-top: 15px;">Lưu cấu hình</button>
+                
+                {% with messages = get_flashed_messages() %}
+                  {% if messages %}
+                    {% for message in messages %}
+                      <span style="color: #00ff88; font-size: 0.9rem; margin-top: 15px;">✓ {{ message }}</span>
+                    {% endfor %}
+                  {% endif %}
+                {% endwith %}
+            </form>
+        </div>
+
+        <div class="grid">
+            <!-- Power 6/55 Card -->
+            <div class="card">
+                <div class="game-header">
+                    <h2>Power 6/55 <span class="ai-badge">AI Active</span></h2>
+                    <span class="badge">Kỳ #{{ latest_55.draw_id if latest_55 else 'N/A' }}</span>
+                </div>
+                <p style="color: var(--text-dim); font-size: 0.9rem;">Kết quả mới nhất: {{ latest_55.draw_date if latest_55 else '---' }}</p>
+                <div class="numbers">
+                    {% if latest_55 %}
+                        {% for n in latest_55.numbers %}
+                            <div class="ball">{{ n }}</div>
+                        {% endfor %}
+                    {% else %}
+                        <p>Chưa có dữ liệu</p>
+                    {% endif %}
+                </div>
+                
+                <div class="stats-row">
+                    <p class="stats-label">Hot Numbers (Tần suất cao):</p>
+                    <div class="hot-list">
+                        {% for n in stats_55.hot %}
+                            <div class="mini-ball" style="background: rgba(255, 62, 62, 0.2); color: #ff3e3e;">{{ n }}</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mega 6/45 Card -->
+            <div class="card">
+                <div class="game-header">
+                    <h2>Mega 6/45 <span class="ai-badge">AI Active</span></h2>
+                    <span class="badge mega">Kỳ #{{ latest_45.draw_id if latest_45 else 'N/A' }}</span>
+                </div>
+                <p style="color: var(--text-dim); font-size: 0.9rem;">Kết quả mới nhất: {{ latest_45.draw_date if latest_45 else '---' }}</p>
+                <div class="numbers">
+                    {% if latest_45 %}
+                        {% for n in latest_45.numbers %}
+                            <div class="ball">{{ n }}</div>
+                        {% endfor %}
+                    {% else %}
+                        <p>Chưa có dữ liệu</p>
+                    {% endif %}
+                </div>
+
+                <div class="stats-row">
+                    <p class="stats-label">Hot Numbers (Tần suất cao):</p>
+                    <div class="hot-list">
+                        {% for n in stats_45.hot %}
+                            <div class="mini-ball" style="background: rgba(0, 102, 255, 0.2); color: #0066ff;">{{ n }}</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Tickets Table -->
+        <div class="card" style="margin-top: 40px;">
+            <h2>🎟 Vé đã chơi gần đây</h2>
+            <table class="stats-table">
+                <thead>
+                    <tr>
+                        <th>Ngày chơi</th>
+                        <th>Loại vé</th>
+                        <th>Bộ số</th>
+                        <th>Kết quả</th>
+                    </tr>
+                </thead>
+                <tbody id="tickets-body">
+                    {% if tickets %}
+                        {% for ticket in tickets %}
+                        <tr>
+                            <td>{{ ticket.played_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td><span class="badge {{ 'mega' if ticket.game_type == '6/45' else '' }}">{{ ticket.game_type }}</span></td>
+                            <td><strong>{{ ticket.numbers | join(' - ') }}</strong></td>
+                            <td>
+                                {% if not ticket.checked %}
+                                    <span class="status-pending">Đang chờ dò...</span>
+                                {% elif ticket.is_win %}
+                                    <span class="status-win">{{ ticket.win_type }} (+{{ "{:,}".format(ticket.prize_amount) if ticket.prize_amount is number else ticket.prize_amount }}đ)</span>
+                                {% else %}
+                                    <span class="status-lose">Không trúng</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="4" style="text-align: center; color: var(--text-dim); padding: 40px;">
+                                Đại ca chưa chơi vé nào. Dùng Bot hoặc /pick để chọn số nha!
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="footer">
+            &copy; 2024 Vietlott Pro Tool - Dành riêng cho Đại ca phongzann.
+        </div>
+    </div>
+</body>
+</html>

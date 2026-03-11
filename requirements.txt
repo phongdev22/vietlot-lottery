@@ -1,0 +1,12 @@
+flask
+flask-login
+pymongo[srv]
+python-telegram-bot
+python-dotenv
+requests
+beautifulsoup4
+pandas
+gunicorn
+matplotlib
+scikit-learn
+apscheduler
