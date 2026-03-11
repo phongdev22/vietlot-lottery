@@ -247,6 +247,9 @@
                         {% for n in latest_55.numbers %}
                             <div class="ball">{{ n }}</div>
                         {% endfor %}
+                        {% if latest_55.special_number %}
+                            <div class="ball" style="background: linear-gradient(135deg, #ff3e3e 0%, #ff8c00 100%); color: white; border: 2px solid #ffb800;" title="Số Đặc Biệt">{{ latest_55.special_number }}</div>
+                        {% endif %}
                     {% else %}
                         <p>Chưa có dữ liệu</p>
                     {% endif %}
