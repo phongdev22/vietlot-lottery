@@ -104,11 +104,61 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == '🎟 Tự động chọn số':
         await auto_pick_tickets(update, context)
 
+async def manual_pick(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args
+    if len(args) != 7:
+        await update.message.reply_text("❌ Sai cú pháp! Hãy gõ: /buy <loại_vé> <6_số>\nVí dụ: /buy 6/55 01 05 12 24 35 45")
+        return
+
+    game_type = args[0]
+    if game_type not in ["6/45", "6/55"]:
+        await update.message.reply_text("❌ Loại vé phải là 6/45 hoặc 6/55")
+        return
+
+    try:
+        nums = [int(x) for x in args[1:]]
+    except ValueError:
+        await update.message.reply_text("❌ Các số phải là số nguyên!")
+        return
+        
+    for n in nums:
+        if n < 1 or (game_type == "6/45" and n > 45) or (game_type == "6/55" and n > 55):
+            await update.message.reply_text(f"❌ Số không hợp lệ cho {game_type}! (Từ 1 đến {'45' if game_type == '6/45' else '55'})")
+            return
+            
+    if len(set(nums)) != 6:
+        await update.message.reply_text("❌ 6 số không được trùng nhau!")
+        return
+
+    chat_id = update.effective_chat.id
+    config = get_config()
+    limit = config.get('daily_limit', 5)
+
+    today_start = datetime.combine(datetime.now().date(), dtime.min)
+    played_today = played_tickets.count_documents({
+        "chat_id": chat_id,
+        "played_at": {"$gte": today_start}
+    })
+    
+    if played_today >= limit:
+        await update.message.reply_text(f"🚫 Đại ca ơi, hôm nay chơi {played_today} vé rồi, đạt giới hạn {limit} vé rồi ạ.")
+        return
+
+    nums.sort()
+    save_played_ticket(chat_id, game_type, nums)
+    
+    await update.message.reply_html(
+        f"✅ <b>Đã lưu vé TỰ CHỌN {game_type} cho Đại ca:</b>\n\n"
+        f"🔢 {', '.join(map(str, nums))}\n\n"
+        f"💎 Hệ thống đã nhận ở Web. Em sẽ tự động dò kết quả lúc 19h nha!"
+    )
+
 if __name__ == '__main__':
     application = ApplicationBuilder().token(TOKEN).build()
     
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('pick', auto_pick_tickets))
+    application.add_handler(CommandHandler('buy', manual_pick))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
     
     print("Bot is running...")
