@@ -51,4 +51,4 @@ jobs:
         sleep 5
         # Thay 'vietlott-pro' và 'lottery-service' bằng tên App và Service của Đại ca trên Koyeb
         # Nếu Đại ca chưa tạo, nó sẽ báo lỗi, nhưng nếu tạo rồi thì lệnh này sẽ ép nó deploy bản mới nhất
-        koyeb service redeploy vietlott-pro/lottery-service
+        koyeb service redeploy indirect-kesley/vietlot-lottery

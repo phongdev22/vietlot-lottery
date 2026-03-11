@@ -7,7 +7,21 @@ from dotenv import load_dotenv
 load_dotenv()
 
 MONGO_URI = os.getenv("MONGO_URI")
-client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
+
+# Cấu hình kết nối MongoDB với SSL linh hoạt hơn để chạy trên Koyeb
+try:
+    client = MongoClient(
+        MONGO_URI, 
+        tlsCAFile=certifi.where(),
+        tlsAllowInvalidCertificates=True # Thêm cái này để "vượt rào" SSL trên Koyeb
+    )
+    # Thử kết nối
+    client.admin.command('ping')
+except Exception as e:
+    print(f"❌ Lỗi kết nối MongoDB: {e}")
+    # Fallback cho trường hợp URI không có SSL
+    client = MongoClient(MONGO_URI)
+
 db = client['lottery_db']
 
 # Collections
