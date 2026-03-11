@@ -8,18 +8,26 @@ load_dotenv()
 
 MONGO_URI = os.getenv("MONGO_URI")
 
-# Cấu hình kết nối MongoDB với SSL linh hoạt hơn để chạy trên Koyeb
+if not MONGO_URI:
+    print("❌ ERROR: MONGO_URI is not set!")
+    exit(1)
+
+# Cấu hình kết nối MongoDB siêu đơn giản để vượt lỗi SSL trên Koyeb
 try:
     client = MongoClient(
-        MONGO_URI, 
-        tlsCAFile=certifi.where(),
-        tlsAllowInvalidCertificates=True # Thêm cái này để "vượt rào" SSL trên Koyeb
+        MONGO_URI,
+        tls=True,
+        tlsAllowInvalidCertificates=True,
+        connectTimeoutMS=30000,
+        socketTimeoutMS=30000,
+        retryWrites=False
     )
-    # Thử kết nối
+    # Thử ping để kiểm tra kết nối ngay lập tức
     client.admin.command('ping')
+    print("✅ Kết nối MongoDB thành công!")
 except Exception as e:
-    print(f"❌ Lỗi kết nối MongoDB: {e}")
-    # Fallback cho trường hợp URI không có SSL
+    print(f"❌ Vẫn lỗi kết nối MongoDB: {e}")
+    # Cách cuối cùng: Chạy không cần cấu hình đặc biệt
     client = MongoClient(MONGO_URI)
 
 db = client['lottery_db']
