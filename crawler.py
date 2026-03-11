@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 from database import save_draw_result
 import time
 from datetime import datetime
+import re
 
 def scrape_vietlott():
     """
@@ -31,12 +32,19 @@ def scrape_vietlott():
             
             # Find Box (The HTML structure provided in user request)
             # The draw ID is inside span#DT6X45_KY_VE (appears to be used for both in the snippet)
-            draw_id_tag = soup.find('span', id=lambda x: x and x.startswith('DT6X'))
+            # Find Draw ID - More specific search
+            # Try to find the span that actually contains the '#' character
+            draw_id_tag = soup.find('span', string=re.compile(r'#\d+'))
             if not draw_id_tag:
-                print(f"Could not find draw ID for {game_type}")
+                # Fallback to older method but check if it's actually an ID
+                draw_id_tag = soup.find('span', id=lambda x: x and ('KY_VE' in x or 'KY' in x))
+            
+            if not draw_id_tag or '#' not in draw_id_tag.text:
+                print(f"Could not find valid draw ID for {game_type}")
                 continue
                 
-            draw_id = int(draw_id_tag.text.replace('#', ''))
+            draw_id_text = draw_id_tag.text.replace('#', '').strip()
+            draw_id = int(draw_id_text)
             
             # Find numbers
             numbers_tags = soup.select('ul.result-number li div.bool')
@@ -53,7 +61,6 @@ def scrape_vietlott():
                 special_num = numbers[6] # The 7th ball is special_number
             
             # Find draw date
-            import re
             header_text = soup.find('h4').text if soup.find('h4') else ""
             date_match = re.search(r'(\d{2}/\d{2}/\d{4})', header_text)
             date_str = date_match.group(1) if date_match else datetime.now().strftime("%d/%m/%Y")

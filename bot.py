@@ -8,8 +8,14 @@ from database import get_latest_draw
 
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+MONGO_URI = os.getenv("MONGO_URI")
 
-print(TOKEN)
+if not TOKEN or not MONGO_URI:
+    print("❌ ERROR: TELEGRAM_BOT_TOKEN or MONGO_URI is not set!")
+    print("Nếu Đại ca đang chạy trên Koyeb, hãy vào Setting -> Environment Variables để thêm nhé!")
+    exit(1)
+
+print(f"Bot starting with token: {TOKEN[:10]}...")
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
