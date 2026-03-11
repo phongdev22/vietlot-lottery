@@ -12,25 +12,25 @@ if not MONGO_URI:
     print("❌ ERROR: MONGO_URI is not set!")
     exit(1)
 
-# Cấu hình kết nối MongoDB siêu bền bỉ cho Atlas + Koyeb
+# Cấu hình kết nối MongoDB cho Koyeb/Atlas (Dùng settings tương thích cao)
 try:
-    # Thử kết nối với mọi "bùa chú" để vượt lỗi SSL Handshake
+    # Thử kết nối với bộ tham số "vượt mọi rào cản"
     client = MongoClient(
         MONGO_URI,
         tls=True,
-        tlsAllowInvalidCertificates=True, # Bỏ qua kiểm tra chứng chỉ nếu nó lỗi
-        serverSelectionTimeoutMS=5000,
+        tlsAllowInvalidCertificates=True,
+        serverSelectionTimeoutMS=10000,
         connectTimeoutMS=10000,
-        socketTimeoutMS=10000,
-        retryWrites=True # Bật lại retry để nó tự thử lại khi gặp lỗi handshake tạm thời
+        # Đôi khi SNI gặp vấn đề, mình thử cấu hình cơ bản nhất
+        retryWrites=False
     )
-    # Ping thử một cái lấy hên
+    # Kiểm tra kêt nối ngay lập tức
     client.admin.command('ping')
-    print("✅ Kết nối MongoDB thành công!")
+    print("✅ Kết nối MongoDB Atlas thành công!")
 except Exception as e:
-    print(f"⚠️ Kết nối MongoDB gặp khó khăn (SSL?): {e}")
-    # Cách cuối cùng: Chạy không cần TLS nếu server hỗ trợ
-    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+    print(f"⚠️ Vẫn lỗi SSL/Handshake: {e}")
+    print("👉 ĐẠI CA KIỂM TRA GIÚP EM: Trên MongoDB Atlas, đã add IP 0.0.0.0/0 (bật Access từ mọi nơi) chưa ạ?")
+    client = MongoClient(MONGO_URI)
 
 db = client['lottery_db']
 
