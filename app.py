@@ -2,12 +2,16 @@ from flask import Flask, render_template, jsonify, request, redirect, url_for, f
 import os
 from dotenv import load_dotenv
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from database import get_all_history, get_latest_draw, get_config, update_config, save_draw_result, get_unpushed_tickets, mark_ticket_checked, get_prediction, draw_history
-from analytics import calculate_stats, get_complex_stats
+from database import (
+    get_all_history, get_latest_draw, get_config, update_config, 
+    save_draw_result, get_unpushed_tickets, mark_ticket_checked, 
+    get_prediction, draw_history, bot_users, played_tickets, save_played_ticket
+)
+from analytics import calculate_stats, get_complex_stats, get_ai_lucky_numbers
 from apscheduler.schedulers.background import BackgroundScheduler
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime
+from datetime import datetime, time as dtime
 import time
 import re
 
@@ -100,9 +104,73 @@ def check_results_job():
             else:
                 mark_ticket_checked(ticket['_id'], False)
 
+def ping_self_job():
+    """Ping trang web để tránh bị Koyeb cho sleep"""
+    url = "https://indirect-kesley-phongzann-35e454f0.koyeb.app"
+    try:
+        # Thêm User-Agent để giống trình duyệt
+        headers = {'User-Agent': 'VietlottPro/1.0 (Keep-Alive)'}
+        r = requests.get(url, headers=headers, timeout=15)
+        print(f"[{datetime.now()}] 🛠 Ping Self ({url}): {r.status_code}")
+    except Exception as e:
+        print(f"[{datetime.now()}] ❌ Ping Self Failed: {e}")
+
+def auto_buy_job():
+    """Tự động chọn và lưu vé cho Đại ca mỗi ngày"""
+    print(f"[{datetime.now()}] 🤖 Bắt đầu Job mua vé tự động...")
+    config = get_config()
+    limit = config.get('daily_limit', 5)
+    
+    # Tìm Đại ca phongzann hoặc user đầu tiên
+    user = bot_users.find_one({"username": "phongzann"})
+    if not user:
+        user = bot_users.find_one() # Lấy đại 1 user nếu ko thấy phongzann
+    
+    if not user:
+        print("❌ Không tìm thấy user nào để mua vé.")
+        return
+        
+    chat_id = user['chat_id']
+    
+    # Xác định loại vé theo ngày (giống bot.py)
+    day = datetime.now().weekday()
+    if day in [0, 2, 4, 6]: # Thứ 2, 4, 6, CN là 6/45 (Mega)
+        game_type = "6/45"
+    else: # Thứ 3, 5, 7 là 6/55 (Power)
+        game_type = "6/55"
+
+    # Kiểm tra xem hôm nay đã chơi bao nhiêu vé rồi
+    today_start = datetime.combine(datetime.now().date(), dtime.min)
+    played_today = played_tickets.count_documents({
+        "chat_id": chat_id,
+        "played_at": {"$gte": today_start}
+    })
+    
+    if played_today >= limit:
+        print(f"⚠️ Đại ca {user.get('username')} đã đạt giới hạn {limit} vé hôm nay.")
+        return
+
+    # Lấy số may mắn từ AI
+    nums = get_ai_lucky_numbers(game_type, "balanced")
+    save_played_ticket(chat_id, game_type, nums)
+    
+    # Gửi thông báo qua Telegram
+    alert_msg = f"🤖 <b>[AUTO] HỆ THỐNG ĐÃ MUA VÉ CHO ĐẠI CA!</b>\n\n"
+    alert_msg += f"🎰 Loại vé: {game_type}\n"
+    alert_msg += f"🔢 Bộ số may mắn: <b>{', '.join(map(str, nums))}</b>\n"
+    alert_msg += f"✨ Chúc Đại ca may mắn! Em sẽ dò kết quả lúc 19h nha."
+    
+    send_bot_alert(chat_id, alert_msg)
+    print(f"✅ Đã mua vé tự động cho {user.get('username')}: {nums}")
+
 # Scheduler
 scheduler = BackgroundScheduler()
-scheduler.add_job(func=check_results_job, trigger="cron", hour=19, minute=0)
+# Job dò kết quả lúc 19h
+scheduler.add_job(func=check_results_job, trigger="cron", hour=19, minute=5)
+# Job tự động mua vé lúc 9h sáng mỗi ngày
+scheduler.add_job(func=auto_buy_job, trigger="cron", hour=9, minute=0)
+# Job ping self mỗi 10 phút để đỡ sleep
+scheduler.add_job(func=ping_self_job, trigger="interval", minutes=10)
 scheduler.start()
 
 @app.route('/')
@@ -150,7 +218,16 @@ def settings():
     limit = request.form.get('daily_limit', type=int)
     if limit:
         update_config(limit)
-        flash('Settings updated, Đại ca!', 'success')
+        flash('Cấu hình đã được cập nhật, Đại ca!', 'success')
+    return redirect(url_for('index'))
+
+@app.route('/manual_buy')
+@login_required
+def manual_buy():
+    """Trigger mua vé thủ công ngay lập tức"""
+    # CHạy job mua vé ngay
+    auto_buy_job()
+    flash('Em đã mua vé may mắn cho Đại ca rồi nhé! Check Telegram nha.', 'success')
     return redirect(url_for('index'))
 
 @app.route('/api/history/<game_type>')

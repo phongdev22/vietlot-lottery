@@ -149,6 +149,9 @@
         .status-win { color: #00ff88; font-weight: 600; }
         .status-lose { color: var(--primary); }
         .status-pending { color: var(--secondary); }
+        .status-success { color: #00ff88; }
+        .status-danger { color: #ff3e3e; }
+        .flash-msg { font-size: 0.9rem; margin-top: 15px; display: inline-block; }
 
         .stats-row {
             margin-top: 20px;
@@ -223,11 +226,14 @@
                     <input type="number" name="daily_limit" value="{{ config.daily_limit }}" style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 8px 12px; border-radius: 8px; width: 100px; margin-top: 5px;">
                 </div>
                 <button type="submit" style="background: var(--secondary); color: #000; border: none; padding: 10px 25px; border-radius: 12px; font-weight: 600; cursor: pointer; margin-top: 15px;">Lưu cấu hình</button>
+                <a href="/manual_buy" style="background: linear-gradient(45deg, #7000ff, #ff3e3e); color: #fff; text-decoration: none; padding: 10px 25px; border-radius: 12px; font-weight: 600; margin-top: 15px; display: inline-block;">🎲 Mua vé ngay (Manual)</a>
                 
-                {% with messages = get_flashed_messages() %}
+                {% with messages = get_flashed_messages(with_categories=True) %}
                   {% if messages %}
-                    {% for message in messages %}
-                      <span style="color: #00ff88; font-size: 0.9rem; margin-top: 15px;">✓ {{ message }}</span>
+                    {% for category, message in messages %}
+                      <span class="flash-msg status-{{ category }}">
+                        {% if category == 'success' %}✓{% else %}✗{% endif %} {{ message }}
+                      </span>
                     {% endfor %}
                   {% endif %}
                 {% endwith %}
