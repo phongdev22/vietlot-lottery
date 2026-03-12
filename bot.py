@@ -39,6 +39,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [
             InlineKeyboardButton("🔍 Kết quả mới", callback_data='latest'),
             InlineKeyboardButton("🎟 Auto Pick", callback_data='auto_pick')
+        ],
+        [
+            InlineKeyboardButton("🎲 Mua vé ngay (Của hệ thống)", callback_data='manual_buy')
         ]
     ]
     
@@ -128,6 +131,21 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data == 'auto_pick':
         await auto_pick_tickets(update, context)
+
+    elif query.data == 'manual_buy':
+        # Import and call auto_buy_job from app.py
+        from app import auto_buy_job
+        result = auto_buy_job()
+        
+        if result == "ALREADY_BOUGHT":
+            await update.effective_chat.send_message("⚠️ Hôm nay hệ thống đã tự động mua vé cho Đại ca rồi, không cần mua thêm đâu ạ!")
+        elif result == "LIMIT_REACHED":
+            await update.effective_chat.send_message("🚫 Đại ca đã đạt giới hạn số vé trong ngày rồi ạ.")
+        elif result:
+            # Note: auto_buy_job already sends a telegram alert on success
+            await query.edit_message_text("✅ Đã kích hoạt mua vé thành công! Đại ca kiểm tra tin nhắn mới nhất nha.")
+        else:
+            await update.effective_chat.send_message("❌ Có lỗi xảy ra khi mua vé. Đại ca kiểm tra lại hệ thống nhé.")
 
 async def manual_pick(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
