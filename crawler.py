@@ -22,12 +22,6 @@ def scrape_vietlott():
 
     for game_type, url in urls.items():
         try:
-            # Chỉ cào nếu chưa có dữ liệu nào trong DB cho loại vé này
-            exists = draw_history.find_one({"game_type": game_type})
-            if exists:
-                print(f"⏩ Đã có dữ liệu {game_type}, bỏ qua cào lại.")
-                continue
-
             print(f"Scraping {game_type} from {url}...")
             response = requests.get(url, headers=headers, timeout=10)
             if response.status_code != 200:

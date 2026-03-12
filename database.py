@@ -45,12 +45,30 @@ ai_predictions = db['ai_predictions']
 def get_config():
     config = system_config.find_one({"type": "admin_config"})
     if not config:
-        config = {"type": "admin_config", "daily_limit": 5, "admin_username": "phongzann"}
+        config = {
+            "type": "admin_config", 
+            "daily_limit": 5, 
+            "auto_buy_count": 3,  # Số vé tự động mua mỗi sáng
+            "admin_username": "phongzann"
+        }
         system_config.insert_one(config)
+    
+    # Đảm bảo có auto_buy_count nếu config cũ chưa có
+    if 'auto_buy_count' not in config:
+        config['auto_buy_count'] = 3
+        system_config.update_one({"type": "admin_config"}, {"$set": {"auto_buy_count": 3}})
+        
     return config
 
-def update_config(daily_limit):
-    system_config.update_one({"type": "admin_config"}, {"$set": {"daily_limit": daily_limit}}, upsert=True)
+def update_config(daily_limit=None, auto_buy_count=None):
+    update_data = {}
+    if daily_limit is not None:
+        update_data["daily_limit"] = daily_limit
+    if auto_buy_count is not None:
+        update_data["auto_buy_count"] = auto_buy_count
+        
+    if update_data:
+        system_config.update_one({"type": "admin_config"}, {"$set": update_data}, upsert=True)
 
 def save_played_ticket(chat_id, game_type, numbers, is_auto=False):
     played_tickets.insert_one({

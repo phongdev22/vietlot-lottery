@@ -10,6 +10,9 @@ load_dotenv()
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 MONGO_URI = os.getenv("MONGO_URI")
 
+import pytz
+vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+
 if not TOKEN or not MONGO_URI:
     print("❌ ERROR: TELEGRAM_BOT_TOKEN or MONGO_URI is not set!")
     print("Nếu Đại ca đang chạy trên Koyeb, hãy vào Setting -> Environment Variables để thêm nhé!")
@@ -41,7 +44,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("🎟 Auto Pick", callback_data='auto_pick')
         ],
         [
-            InlineKeyboardButton("🎲 Mua vé ngay (Của hệ thống)", callback_data='manual_buy')
+            InlineKeyboardButton("🎫 Kiểm tra vé hôm nay", callback_data='check_today')
+        ],
+        [
+            InlineKeyboardButton("🎲 Mua vé tự động ngay", callback_data='manual_buy')
         ]
     ]
     
@@ -147,15 +153,24 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.effective_chat.send_message("❌ Có lỗi xảy ra khi mua vé. Đại ca kiểm tra lại hệ thống nhé.")
 
+    elif query.data == 'check_today':
+        await check_today_tickets(update, context)
+
 async def manual_pick(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     if len(args) != 7:
-        await update.effective_chat.send_message("❌ Sai cú pháp! Hãy gõ: /buy <loại_vé> <6_số>\nVí dụ: /buy 6/55 01 05 12 24 35 45")
+        await update.effective_chat.send_message("❌ Sai cú pháp! Hãy gõ: /buy <loại> <6_số>\nVí dụ: /buy 655 01 05 12 24 35 45")
         return
 
     game_type = args[0]
+    # Chuẩn hóa loại vé: 645 -> 6/45, 655 -> 6/55
+    if game_type in ["645", "45"]:
+        game_type = "6/45"
+    elif game_type in ["655", "55"]:
+        game_type = "6/55"
+
     if game_type not in ["6/45", "6/55"]:
-        await update.effective_chat.send_message("❌ Loại vé phải là 6/45 hoặc 6/55")
+        await update.effective_chat.send_message("❌ Loại vé phải là 645 hoặc 655 ạ!")
         return
 
     try:
@@ -174,19 +189,6 @@ async def manual_pick(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     chat_id = update.effective_chat.id
-    config = get_config()
-    limit = config.get('daily_limit', 5)
-
-    today_start = datetime.combine(datetime.now().date(), dtime.min)
-    played_today = played_tickets.count_documents({
-        "chat_id": chat_id,
-        "played_at": {"$gte": today_start}
-    })
-    
-    if played_today >= limit:
-        await update.effective_chat.send_message(f"🚫 Đại ca chơi {played_today} vé rồi, đạt giới hạn {limit} vé.")
-        return
-
     nums.sort()
     save_played_ticket(chat_id, game_type, nums)
     
@@ -197,12 +199,37 @@ async def manual_pick(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='HTML'
     )
 
+async def check_today_tickets(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    now_vn = datetime.now(vn_tz)
+    today_start = datetime.combine(now_vn.date(), dtime.min).replace(tzinfo=vn_tz)
+    
+    tickets = list(played_tickets.find({
+        "chat_id": chat_id,
+        "played_at": {"$gte": today_start}
+    }))
+    
+    if not tickets:
+        await update.effective_chat.send_message("🎫 Hôm nay Đại ca chưa mua vé nào hết. Mau mau chọn số đi ạ! /buy hoặc /pick nhé.")
+        return
+        
+    msg = f"🎫 <b>DANH SÁCH VÉ CỦA ĐẠI CA HÔM NAY:</b>\n"
+    msg += f"📅 Ngày: {now_vn.strftime('%d/%m/%Y')}\n\n"
+    
+    for idx, t in enumerate(tickets, 1):
+        mode = "🤖 [AUTO]" if t.get('is_auto') else "👤 [MANUAL]"
+        msg += f"{idx}. {mode} <b>{t['game_type']}</b>: {', '.join(map(str, t['numbers']))}\n"
+    
+    msg += f"\n✨ Tổng cộng: {len(tickets)} vé. Chúc Đại ca may mắn!"
+    await update.effective_chat.send_message(msg, parse_mode='HTML')
+
 if __name__ == '__main__':
     application = ApplicationBuilder().token(TOKEN).build()
     
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('pick', auto_pick_tickets))
     application.add_handler(CommandHandler('buy', manual_pick))
+    application.add_handler(CommandHandler('check', check_today_tickets))
     application.add_handler(CallbackQueryHandler(button_handler))
     
     print("Bot is running...")

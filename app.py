@@ -14,6 +14,9 @@ from bs4 import BeautifulSoup
 from datetime import datetime, time as dtime
 import time
 import re
+import pytz
+
+vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
 
 load_dotenv()
 
@@ -103,6 +106,45 @@ def check_results_job():
                 print(f"Ticket {ticket['_id']} is a WINNER! Message sent.")
             else:
                 mark_ticket_checked(ticket['_id'], False)
+    
+    # Send a small summary via Telegram if something was checked
+    if unpushed:
+        admin_user = bot_users.find_one({"username": "phongzann"})
+        if admin_user:
+            summary = f"🔄 <b>[DÒ SỐ] KẾT QUẢ CHI TIẾT KỲ NÀY</b>\n\n"
+            
+            # Group unpushed by game_type to show the result numbers once
+            processed_tickets = []
+            for t in unpushed:
+                latest = get_latest_draw(t['game_type'])
+                if not latest: continue
+                
+                matched = set(t['numbers']) & set(latest['numbers'])
+                match_count = len(matched)
+                
+                status_icon = "✅" if t.get('is_win') else "❌"
+                match_text = f"{status_icon} <b>{t['game_type']}</b>: {', '.join(map(str, t['numbers']))} "
+                match_text += f"(Trúng {match_count} số"
+                
+                if t['game_type'] == "6/55" and latest.get('special_number'):
+                    if latest['special_number'] in t['numbers']:
+                        match_text += " + Bonus"
+                
+                match_text += ")"
+                if t.get('is_win'):
+                    match_text += f" -> <b>TRÚNG {t['win_type']}!</b>"
+                
+                processed_tickets.append(match_text)
+
+            summary += "\n".join(processed_tickets)
+            summary += f"\n\n✨ Tổng cộng: {len(unpushed)} vé. "
+            
+            if any(t.get('is_win') for t in unpushed):
+                summary += "\n🎊 Chúc mừng Đại ca đã có vé trúng thưởng!"
+            else:
+                summary += "\n💪 Rất tiếc kỳ này chưa trúng, chúc Đại ca may mắn kỳ sau nha!"
+                
+            send_bot_alert(admin_user['chat_id'], summary)
 
 def ping_self_job():
     """Ping trang web để tránh bị Koyeb cho sleep"""
@@ -117,32 +159,32 @@ def ping_self_job():
 
 def auto_buy_job():
     """Tự động chọn và lưu vé cho Đại ca mỗi ngày"""
-    print(f"[{datetime.now()}] 🤖 Bắt đầu Job mua vé tự động...")
+    print(f"[{datetime.now(vn_tz)}] 🤖 Bắt đầu Job mua vé tự động...")
     config = get_config()
     limit = config.get('daily_limit', 5)
+    buy_count = config.get('auto_buy_count', 3) # Số bộ số cần mua
     
-    # Tìm Đại ca phongzann hoặc user đầu tiên
     user = bot_users.find_one({"username": "phongzann"})
     if not user:
-        # Nếu chưa có phongzann, thử tìm bất kỳ ai đã start bot
         user = bot_users.find_one()
     
     if not user:
-        print("❌ Không tìm thấy user nào để mua vé. Có thể Đại ca chưa nhấn /start trên Bot Telegram.")
+        print("❌ Không tìm thấy user nào để mua vé.")
         return False
         
     chat_id = user['chat_id']
     username = user.get('username') or user.get('first_name', 'Đại ca')
     
-    # Xác định loại vé theo ngày
-    day = datetime.now().weekday()
-    if day in [0, 2, 4, 6]: # Thứ 2, 4, 6, CN là 6/45 (Mega)
+    # Xác định loại vé theo ngày (VN time)
+    now_vn = datetime.now(vn_tz)
+    day = now_vn.weekday()
+    if day in [0, 2, 4, 6]: # Thứ 2, 4, 6, CN là 6/45
         game_type = "6/45"
-    else: # Thứ 3, 5, 7 là 6/55 (Power)
+    else: # Thứ 3, 5, 7 là 6/55
         game_type = "6/55"
 
     # Kiểm tra xem hôm nay ĐÃ MUA TỰ ĐỘNG chưa
-    today_start = datetime.combine(datetime.now().date(), dtime.min)
+    today_start = datetime.combine(now_vn.date(), dtime.min).replace(tzinfo=vn_tz)
     auto_exists = played_tickets.find_one({
         "chat_id": chat_id,
         "played_at": {"$gte": today_start},
@@ -153,7 +195,7 @@ def auto_buy_job():
         print(f"⚠️ Hôm nay hệ thống đã tự động mua vé cho {username} rồi.")
         return "ALREADY_BOUGHT"
 
-    # Kiểm tra giới hạn tổng số vé (nếu vẫn muốn giữ limit tổng)
+    # Kiểm tra giới hạn tổng số vé
     played_today = played_tickets.count_documents({
         "chat_id": chat_id,
         "played_at": {"$gte": today_start}
@@ -163,30 +205,43 @@ def auto_buy_job():
         print(f"⚠️ Đại ca {username} đã đạt giới hạn {limit} vé hôm nay.")
         return "LIMIT_REACHED"
 
-    # Lấy số may mắn từ AI
+    # Thực hiện mua n bộ số
+    actual_buy = min(buy_count, limit - played_today)
+    if actual_buy <= 0:
+        return "LIMIT_REACHED"
+
+    bought_sets = []
     try:
-        nums = get_ai_lucky_numbers(game_type, "balanced")
-        save_played_ticket(chat_id, game_type, nums, is_auto=True)
+        from analytics import get_ai_lucky_numbers
+        for _ in range(actual_buy):
+            nums = get_ai_lucky_numbers(game_type, "balanced")
+            save_played_ticket(chat_id, game_type, nums, is_auto=True)
+            bought_sets.append(nums)
         
-        # Gửi thông báo qua Telegram
+        # Gửi thông báo tổng hợp qua Telegram
         alert_msg = f"🤖 <b>[AUTO] HỆ THỐNG ĐÃ MUA VÉ CHO ĐẠI CA!</b>\n\n"
-        alert_msg += f"🎰 Loại vé: {game_type}\n"
-        alert_msg += f"🔢 Bộ số may mắn: <b>{', '.join(map(str, nums))}</b>\n"
-        alert_msg += f"✨ Chúc Đại ca may mắn! Em sẽ dò kết quả lúc 19h nha."
+        alert_msg += f"🎰 Loại vé: <b>{game_type}</b>\n"
+        alert_msg += f"📅 Ngày mua: {now_vn.strftime('%d/%m/%Y')}\n"
+        alert_msg += f"🎫 Số lượng: <b>{actual_buy} bộ số</b>\n\n"
+        
+        for idx, nums in enumerate(bought_sets, 1):
+            alert_msg += f"{idx}. <b>{', '.join(map(str, nums))}</b>\n"
+            
+        alert_msg += f"\n✨ Chúc Đại ca may mắn! Em sẽ dò kết quả lúc 19h nha."
         
         send_bot_alert(chat_id, alert_msg)
-        print(f"✅ Đã mua vé tự động cho {username}: {nums}")
+        print(f"✅ Đã mua {actual_buy} vé tự động cho {username}")
         return True
     except Exception as e:
         print(f"❌ Lỗi khi mua vé tự động: {e}")
         return False
 
 # Scheduler
-scheduler = BackgroundScheduler()
-# Job dò kết quả lúc 19h
+scheduler = BackgroundScheduler(timezone=vn_tz)
+# Job dò kết quả lúc 19h5 (sau khi có KQ khoảng 15p)
 scheduler.add_job(func=check_results_job, trigger="cron", hour=19, minute=5)
-# Job tự động mua vé lúc 9h sáng mỗi ngày
-scheduler.add_job(func=auto_buy_job, trigger="cron", hour=9, minute=0)
+# Job tự động mua vé lúc 8h30 sáng mỗi ngày
+scheduler.add_job(func=auto_buy_job, trigger="cron", hour=8, minute=30)
 # Job ping self mỗi 10 phút để đỡ sleep
 scheduler.add_job(func=ping_self_job, trigger="interval", minutes=10)
 scheduler.start()
@@ -234,8 +289,9 @@ def logout():
 @login_required
 def settings():
     limit = request.form.get('daily_limit', type=int)
-    if limit:
-        update_config(limit)
+    auto_count = request.form.get('auto_buy_count', type=int)
+    if limit or auto_count:
+        update_config(daily_limit=limit, auto_buy_count=auto_count)
         flash('Cấu hình đã được cập nhật, Đại ca!', 'success')
     return redirect(url_for('index'))
 
