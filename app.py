@@ -15,6 +15,7 @@ from datetime import datetime, time as dtime
 import time
 import re
 import pytz
+import threading
 
 vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
 
@@ -50,14 +51,42 @@ def send_bot_alert(chat_id, message):
         print(f"Failed to send bot alert: {e}")
 
 def check_results_job():
-    print(f"[{datetime.now()}] Running draw check & ticket verification...")
-    # 1. Scrape real data
-    new_results = scrape_vietlott()
+    now_vn = datetime.now(vn_tz)
+    today_str = now_vn.strftime("%d/%m/%Y")
+    print(f"[{now_vn}] Running draw check & ticket verification for {today_str}...")
+    
+    # 1. Kiểm tra xem DB đã có kết quả hôm nay chưa
+    latest_45 = get_latest_draw("6/45")
+    latest_55 = get_latest_draw("6/55")
+    
+    # Xác định loại vé quay thưởng hôm nay
+    day = now_vn.weekday()
+    target_game = "6/45" if day in [0, 2, 4, 6] else "6/55"
+    latest_target = latest_45 if target_game == "6/45" else latest_55
+    
+    if latest_target and latest_target.get('draw_date') == today_str:
+        print(f"✅ Đã có kết quả {target_game} cho ngày {today_str} trong Database. Tiến hành dò luôn.")
+    else:
+        print(f"🔍 Chưa có kết quả {target_game} cho {today_str}. Đang đi cào dữ liệu mới...")
+        scrape_vietlott()
+        # Refresh data sau khi cào
+        latest_45 = get_latest_draw("6/45")
+        latest_55 = get_latest_draw("6/55")
     
     # 2. Check unpushed tickets
     unpushed = get_unpushed_tickets()
+    if not unpushed:
+        print("No unpushed tickets to check.")
+        return
+
+    # Cache kết quả mới nhất
+    latest_draws = {
+        "6/45": latest_45,
+        "6/55": latest_55
+    }
+
     for ticket in unpushed:
-        latest = get_latest_draw(ticket['game_type'])
+        latest = latest_draws.get(ticket['game_type'])
         if latest:
             # Check if ticket numbers match latest draw
             matched = set(ticket['numbers']) & set(latest['numbers'])
@@ -108,43 +137,42 @@ def check_results_job():
                 mark_ticket_checked(ticket['_id'], False)
     
     # Send a small summary via Telegram if something was checked
-    if unpushed:
-        admin_user = bot_users.find_one({"username": "phongzann"})
-        if admin_user:
-            summary = f"🔄 <b>[DÒ SỐ] KẾT QUẢ CHI TIẾT KỲ NÀY</b>\n\n"
+    admin_user = bot_users.find_one({"username": "phongzann"})
+    if admin_user:
+        summary = f"🔄 <b>[DÒ SỐ] KẾT QUẢ CHI TIẾT KỲ NÀY</b>\n\n"
+        
+        # Group unpushed by game_type to show the result numbers once
+        processed_tickets = []
+        for t in unpushed:
+            latest = latest_draws.get(t['game_type'])
+            if not latest: continue
             
-            # Group unpushed by game_type to show the result numbers once
-            processed_tickets = []
-            for t in unpushed:
-                latest = get_latest_draw(t['game_type'])
-                if not latest: continue
-                
-                matched = set(t['numbers']) & set(latest['numbers'])
-                match_count = len(matched)
-                
-                status_icon = "✅" if t.get('is_win') else "❌"
-                match_text = f"{status_icon} <b>{t['game_type']}</b>: {', '.join(map(str, t['numbers']))} "
-                match_text += f"(Trúng {match_count} số"
-                
-                if t['game_type'] == "6/55" and latest.get('special_number'):
-                    if latest['special_number'] in t['numbers']:
-                        match_text += " + Bonus"
-                
-                match_text += ")"
-                if t.get('is_win'):
-                    match_text += f" -> <b>TRÚNG {t['win_type']}!</b>"
-                
-                processed_tickets.append(match_text)
+            matched = set(t['numbers']) & set(latest['numbers'])
+            match_count = len(matched)
+            
+            status_icon = "✅" if t.get('is_win') else "❌"
+            match_text = f"{status_icon} <b>{t['game_type']}</b>: {', '.join(map(str, t['numbers']))} "
+            match_text += f"(Trúng {match_count} số"
+            
+            if t['game_type'] == "6/55" and latest.get('special_number'):
+                if latest['special_number'] in t['numbers']:
+                    match_text += " + Bonus"
+            
+            match_text += ")"
+            if t.get('is_win'):
+                match_text += f" -> <b>TRÚNG {t['win_type']}!</b>"
+            
+            processed_tickets.append(match_text)
 
-            summary += "\n".join(processed_tickets)
-            summary += f"\n\n✨ Tổng cộng: {len(unpushed)} vé. "
+        summary += "\n".join(processed_tickets)
+        summary += f"\n\n✨ Tổng cộng: {len(unpushed)} vé. "
+        
+        if any(t.get('is_win') for t in unpushed):
+            summary += "\n🎊 Chúc mừng Đại ca đã có vé trúng thưởng!"
+        else:
+            summary += "\n💪 Rất tiếc kỳ này chưa trúng, chúc Đại ca may mắn kỳ sau nha!"
             
-            if any(t.get('is_win') for t in unpushed):
-                summary += "\n🎊 Chúc mừng Đại ca đã có vé trúng thưởng!"
-            else:
-                summary += "\n💪 Rất tiếc kỳ này chưa trúng, chúc Đại ca may mắn kỳ sau nha!"
-                
-            send_bot_alert(admin_user['chat_id'], summary)
+        send_bot_alert(admin_user['chat_id'], summary)
 
 def ping_self_job():
     """Ping trang web để tránh bị Koyeb cho sleep"""
@@ -238,8 +266,8 @@ def auto_buy_job():
 
 # Scheduler
 scheduler = BackgroundScheduler(timezone=vn_tz)
-# Job dò kết quả lúc 19h5 (sau khi có KQ khoảng 15p)
-scheduler.add_job(func=check_results_job, trigger="cron", hour=19, minute=5)
+# Job dò kết quả lúc 18h45 (Uu tiên DB, nếu chưa có thì cào)
+scheduler.add_job(func=check_results_job, trigger="cron", hour=18, minute=45)
 # Job tự động mua vé lúc 8h30 sáng mỗi ngày
 scheduler.add_job(func=auto_buy_job, trigger="cron", hour=8, minute=30)
 # Job ping self mỗi 10 phút để đỡ sleep
@@ -313,9 +341,9 @@ def manual_buy():
 @app.route('/manual_check')
 @login_required
 def manual_check():
-    """Trigger dò số thủ công ngay lập tức"""
-    check_results_job()
-    flash('Em đang dò số đây ạ, Đại ca đợi tin nhắn Telegram nhé!', 'success')
+    """Trigger dò số thủ công ngay lập tức (Chạy ngầm)"""
+    threading.Thread(target=check_results_job).start()
+    flash('Em đang dò số trong nền đây ạ, Đại ca đợi tin nhắn Telegram gửi về nhé (khoảng 5-10 giây)!', 'success')
     return redirect(url_for('index'))
 
 @app.route('/api/history/<game_type>')
