@@ -47,7 +47,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("🎫 Kiểm tra vé hôm nay", callback_data='check_today')
         ],
         [
-            InlineKeyboardButton("🎲 Mua vé tự động ngay", callback_data='manual_buy')
+            InlineKeyboardButton("🎲 Mua vé tự động ngay", callback_data='manual_buy'),
+            InlineKeyboardButton("🔍 Dò số ngay", callback_data='manual_check')
         ]
     ]
     
@@ -156,6 +157,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == 'check_today':
         await check_today_tickets(update, context)
 
+    elif query.data == 'manual_check':
+        from app import check_results_job
+        check_results_job()
+        await update.effective_chat.send_message("🔍 Em đang tiến hành dò số đây ạ! Đại ca đợi tin nhắn kết quả nhé.")
+
 async def manual_pick(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     if len(args) != 7:
@@ -223,6 +229,11 @@ async def check_today_tickets(update: Update, context: ContextTypes.DEFAULT_TYPE
     msg += f"\n✨ Tổng cộng: {len(tickets)} vé. Chúc Đại ca may mắn!"
     await update.effective_chat.send_message(msg, parse_mode='HTML')
 
+async def manual_check_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from app import check_results_job
+    check_results_job()
+    await update.effective_chat.send_message("🔍 Em đang tiến hành dò số đây ạ! Đại ca đợi tin nhắn kết quả nhé.")
+
 if __name__ == '__main__':
     application = ApplicationBuilder().token(TOKEN).build()
     
@@ -230,6 +241,7 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler('pick', auto_pick_tickets))
     application.add_handler(CommandHandler('buy', manual_pick))
     application.add_handler(CommandHandler('check', check_today_tickets))
+    application.add_handler(CommandHandler('check_results', manual_check_cmd))
     application.add_handler(CallbackQueryHandler(button_handler))
     
     print("Bot is running...")

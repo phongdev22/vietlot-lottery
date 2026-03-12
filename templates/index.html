@@ -230,6 +230,10 @@
                     <input type="number" name="auto_buy_count" value="{{ config.auto_buy_count }}" style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 8px 12px; border-radius: 8px; width: 100px; margin-top: 5px;">
                 </div>
                 <button type="submit" style="background: var(--secondary); color: #000; border: none; padding: 10px 25px; border-radius: 12px; font-weight: 600; cursor: pointer; margin-top: 15px;">Lưu cấu hình</button>
+                <div style="margin-top: 15px; display: flex; gap: 10px;">
+                    <a href="/manual_buy" style="background: var(--primary); color: #fff; text-decoration: none; padding: 10px 20px; border-radius: 12px; font-weight: 600; font-size: 0.9rem;">🎲 Mua vé ngay</a>
+                    <a href="/manual_check" style="background: var(--accent); color: #fff; text-decoration: none; padding: 10px 20px; border-radius: 12px; font-weight: 600; font-size: 0.9rem;">🔍 Dò số ngay</a>
+                </div>
                 
                 {% with messages = get_flashed_messages(with_categories=True) %}
                   {% if messages %}

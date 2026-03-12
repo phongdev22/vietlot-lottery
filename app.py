@@ -310,6 +310,14 @@ def manual_buy():
         flash('Có lỗi xảy ra hoặc chưa có ai đăng ký Bot Telegram, Đại ca kiểm tra lại nhé.', 'danger')
     return redirect(url_for('index'))
 
+@app.route('/manual_check')
+@login_required
+def manual_check():
+    """Trigger dò số thủ công ngay lập tức"""
+    check_results_job()
+    flash('Em đang dò số đây ạ, Đại ca đợi tin nhắn Telegram nhé!', 'success')
+    return redirect(url_for('index'))
+
 @app.route('/api/history/<game_type>')
 @login_required
 def api_history(game_type):
