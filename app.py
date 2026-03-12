@@ -124,44 +124,62 @@ def auto_buy_job():
     # Tìm Đại ca phongzann hoặc user đầu tiên
     user = bot_users.find_one({"username": "phongzann"})
     if not user:
-        user = bot_users.find_one() # Lấy đại 1 user nếu ko thấy phongzann
+        # Nếu chưa có phongzann, thử tìm bất kỳ ai đã start bot
+        user = bot_users.find_one()
     
     if not user:
-        print("❌ Không tìm thấy user nào để mua vé.")
-        return
+        print("❌ Không tìm thấy user nào để mua vé. Có thể Đại ca chưa nhấn /start trên Bot Telegram.")
+        return False
         
     chat_id = user['chat_id']
+    username = user.get('username') or user.get('first_name', 'Đại ca')
     
-    # Xác định loại vé theo ngày (giống bot.py)
+    # Xác định loại vé theo ngày
     day = datetime.now().weekday()
     if day in [0, 2, 4, 6]: # Thứ 2, 4, 6, CN là 6/45 (Mega)
         game_type = "6/45"
     else: # Thứ 3, 5, 7 là 6/55 (Power)
         game_type = "6/55"
 
-    # Kiểm tra xem hôm nay đã chơi bao nhiêu vé rồi
+    # Kiểm tra xem hôm nay ĐÃ MUA TỰ ĐỘNG chưa
     today_start = datetime.combine(datetime.now().date(), dtime.min)
+    auto_exists = played_tickets.find_one({
+        "chat_id": chat_id,
+        "played_at": {"$gte": today_start},
+        "is_auto": True
+    })
+    
+    if auto_exists:
+        print(f"⚠️ Hôm nay hệ thống đã tự động mua vé cho {username} rồi.")
+        return "ALREADY_BOUGHT"
+
+    # Kiểm tra giới hạn tổng số vé (nếu vẫn muốn giữ limit tổng)
     played_today = played_tickets.count_documents({
         "chat_id": chat_id,
         "played_at": {"$gte": today_start}
     })
     
     if played_today >= limit:
-        print(f"⚠️ Đại ca {user.get('username')} đã đạt giới hạn {limit} vé hôm nay.")
-        return
+        print(f"⚠️ Đại ca {username} đã đạt giới hạn {limit} vé hôm nay.")
+        return "LIMIT_REACHED"
 
     # Lấy số may mắn từ AI
-    nums = get_ai_lucky_numbers(game_type, "balanced")
-    save_played_ticket(chat_id, game_type, nums)
-    
-    # Gửi thông báo qua Telegram
-    alert_msg = f"🤖 <b>[AUTO] HỆ THỐNG ĐÃ MUA VÉ CHO ĐẠI CA!</b>\n\n"
-    alert_msg += f"🎰 Loại vé: {game_type}\n"
-    alert_msg += f"🔢 Bộ số may mắn: <b>{', '.join(map(str, nums))}</b>\n"
-    alert_msg += f"✨ Chúc Đại ca may mắn! Em sẽ dò kết quả lúc 19h nha."
-    
-    send_bot_alert(chat_id, alert_msg)
-    print(f"✅ Đã mua vé tự động cho {user.get('username')}: {nums}")
+    try:
+        nums = get_ai_lucky_numbers(game_type, "balanced")
+        save_played_ticket(chat_id, game_type, nums, is_auto=True)
+        
+        # Gửi thông báo qua Telegram
+        alert_msg = f"🤖 <b>[AUTO] HỆ THỐNG ĐÃ MUA VÉ CHO ĐẠI CA!</b>\n\n"
+        alert_msg += f"🎰 Loại vé: {game_type}\n"
+        alert_msg += f"🔢 Bộ số may mắn: <b>{', '.join(map(str, nums))}</b>\n"
+        alert_msg += f"✨ Chúc Đại ca may mắn! Em sẽ dò kết quả lúc 19h nha."
+        
+        send_bot_alert(chat_id, alert_msg)
+        print(f"✅ Đã mua vé tự động cho {username}: {nums}")
+        return True
+    except Exception as e:
+        print(f"❌ Lỗi khi mua vé tự động: {e}")
+        return False
 
 # Scheduler
 scheduler = BackgroundScheduler()
@@ -225,9 +243,15 @@ def settings():
 @login_required
 def manual_buy():
     """Trigger mua vé thủ công ngay lập tức"""
-    # CHạy job mua vé ngay
-    auto_buy_job()
-    flash('Em đã mua vé may mắn cho Đại ca rồi nhé! Check Telegram nha.', 'success')
+    result = auto_buy_job()
+    if result == "ALREADY_BOUGHT":
+        flash('Hôm nay hệ thống đã tự động mua vé rồi, Đại ca không cần mua thêm đâu!', 'warning')
+    elif result == "LIMIT_REACHED":
+        flash('Đại ca đã đạt giới hạn số vé trong ngày rồi ạ.', 'danger')
+    elif result:
+        flash('Em đã mua vé may mắn cho Đại ca rồi nhé! Check Telegram nha.', 'success')
+    else:
+        flash('Có lỗi xảy ra hoặc chưa có ai đăng ký Bot Telegram, Đại ca kiểm tra lại nhé.', 'danger')
     return redirect(url_for('index'))
 
 @app.route('/api/history/<game_type>')

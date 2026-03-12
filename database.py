@@ -52,14 +52,15 @@ def get_config():
 def update_config(daily_limit):
     system_config.update_one({"type": "admin_config"}, {"$set": {"daily_limit": daily_limit}}, upsert=True)
 
-def save_played_ticket(chat_id, game_type, numbers):
+def save_played_ticket(chat_id, game_type, numbers, is_auto=False):
     played_tickets.insert_one({
         "chat_id": chat_id,
         "game_type": game_type,
         "numbers": sorted([int(n) for n in numbers]),
         "played_at": datetime.now(),
         "checked": False,
-        "is_win": False
+        "is_win": False,
+        "is_auto": is_auto
     })
 
 def get_unpushed_tickets():

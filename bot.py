@@ -21,6 +21,12 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    chat_id = update.effective_chat.id
+    
+    # Register user to database
+    from database import register_user
+    register_user(chat_id, user.username, user.first_name)
+    
     keyboard = [
         [
             InlineKeyboardButton("🎯 6/55 Lucky", callback_data='pick_655'),
@@ -83,6 +89,13 @@ async def auto_pick_tickets(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    user = update.effective_user
+    chat_id = update.effective_chat.id
+    
+    # Register/Update user
+    from database import register_user
+    register_user(chat_id, user.username, user.first_name)
+    
     await query.answer()
     
     if query.data == 'pick_655':
