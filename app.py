@@ -12,11 +12,11 @@ from analytics import calculate_stats, get_complex_stats, get_ai_lucky_numbers
 from apscheduler.schedulers.background import BackgroundScheduler
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime, time as dtime
-import time
-import re
-import pytz
 import threading
+import pytz
+from datetime import datetime, time as dtime, timezone, timedelta
+
+vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
 
 vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
 
@@ -73,7 +73,12 @@ def check_results_job():
         # Refresh data sau khi cào
         latest_45 = get_latest_draw("6/45")
         latest_55 = get_latest_draw("6/55")
+        latest_target = latest_45 if target_game == "6/45" else latest_55
     
+    if not latest_target:
+        print("❌ Vẫn chưa thấy kết quả mới sau khi cào. Có thể Vietlott chưa cập nhật.")
+        return
+
     # 2. Check unpushed tickets
     unpushed = get_unpushed_tickets()
     if not unpushed:
@@ -187,80 +192,61 @@ def ping_self_job():
         print(f"[{datetime.now()}] ❌ Ping Self Failed: {e}")
 
 def auto_buy_job():
-    """Tự động chọn và lưu vé cho Đại ca mỗi ngày"""
-    print(f"[{datetime.now(vn_tz)}] 🤖 Bắt đầu Job mua vé tự động...")
+    """Tự động chọn số và mua vé mỗi sáng"""
     config = get_config()
-    limit = config.get('daily_limit', 5)
-    buy_count = config.get('auto_buy_count', 3) # Số bộ số cần mua
-    
-    user = bot_users.find_one({"username": "phongzann"})
-    if not user:
-        user = bot_users.find_one()
-    
-    if not user:
-        print("❌ Không tìm thấy user nào để mua vé.")
+    auto_count = config.get('auto_buy_count', 0)
+    if auto_count <= 0:
         return False
-        
-    chat_id = user['chat_id']
-    username = user.get('username') or user.get('first_name', 'Đại ca')
-    
-    # Xác định loại vé theo ngày (VN time)
+
+    # Xác định loại game theo ngày (giờ VN)
     now_vn = datetime.now(vn_tz)
     day = now_vn.weekday()
-    if day in [0, 2, 4, 6]: # Thứ 2, 4, 6, CN là 6/45
-        game_type = "6/45"
-    else: # Thứ 3, 5, 7 là 6/55
-        game_type = "6/55"
-    
+    game_type = "6/45" if day in [0, 2, 4, 6] else "6/55"
+
+    # Lấy ID kỳ quay tiếp theo
     target_draw_id = get_target_draw_id(game_type)
 
-    # Kiểm tra xem hôm nay ĐÃ MUA TỰ ĐỘNG chưa
-    today_start = datetime.combine(now_vn.date(), dtime.min).replace(tzinfo=vn_tz)
-    auto_exists = played_tickets.find_one({
-        "chat_id": chat_id,
-        "played_at": {"$gte": today_start},
-        "is_auto": True
+    # Kiểm tra xem hôm nay đã mua tự động cho game này chưa (theo ngày VN)
+    today_str = now_vn.strftime("%Y-%m-%d")
+    existing = played_tickets.find_one({
+        "game_type": game_type,
+        "is_auto": True,
+        "buy_date_vn": today_str
     })
-    
-    if auto_exists:
-        print(f"⚠️ Hôm nay hệ thống đã tự động mua vé cho {username} rồi.")
+
+    if existing:
+        print(f"Skipping auto buy: Already bought {game_type} for {today_str}")
         return "ALREADY_BOUGHT"
 
-    # Kiểm tra giới hạn tổng số vé
-    played_today = played_tickets.count_documents({
-        "chat_id": chat_id,
-        "played_at": {"$gte": today_start}
-    })
-    
-    if played_today >= limit:
-        print(f"⚠️ Đại ca {username} đã đạt giới hạn {limit} vé hôm nay.")
-        return "LIMIT_REACHED"
+    users = list(bot_users.find())
+    if not users:
+        return False
 
-    # Thực hiện mua n bộ số
-    actual_buy = min(buy_count, limit - played_today)
-    if actual_buy <= 0:
-        return "LIMIT_REACHED"
-
+    chat_id = users[0]['chat_id']
     bought_sets = []
+
     try:
-        for _ in range(actual_buy):
+        for _ in range(auto_count):
             nums = get_ai_lucky_numbers(game_type, "balanced")
+            # save_played_ticket now handles buy_date_vn automatically
             save_played_ticket(chat_id, game_type, nums, draw_id=target_draw_id, is_auto=True)
             bought_sets.append(nums)
-        
-        # Gửi thông báo tổng hợp qua Telegram
-        alert_msg = f"🤖 <b>[AUTO] HỆ THỐNG ĐÃ MUA VÉ CHO ĐẠI CA!</b>\n\n"
-        alert_msg += f"🎰 Loại vé: <b>{game_type}</b>\n"
-        alert_msg += f"📅 Ngày mua: {now_vn.strftime('%d/%m/%Y')}\n"
-        alert_msg += f"🎫 Số lượng: <b>{actual_buy} bộ số</b>\n\n"
-        
-        for idx, nums in enumerate(bought_sets, 1):
-            alert_msg += f"{idx}. <b>{', '.join(map(str, nums))}</b>\n"
-            
-        alert_msg += f"\n✨ Chúc Đại ca may mắn! Em sẽ dò kết quả lúc 19h nha."
-        
-        send_bot_alert(chat_id, alert_msg)
-        print(f"✅ Đã mua {actual_buy} vé tự động cho {username}")
+
+        # Gửi thông báo Telegram
+        token = os.getenv("TELEGRAM_BOT_TOKEN")
+        if token:
+            msg = f"🤖 <b>HỆ THỐNG TỰ ĐỘNG MUA VÉ</b>\n"
+            msg += f"🎰 Loại vé: {game_type} (Kỳ #{target_draw_id})\n"
+            msg += f"📅 Ngày mua: {now_vn.strftime('%d/%m/%Y')}\n\n"
+            for idx, s in enumerate(bought_sets, 1):
+                msg += f"{idx}. {', '.join(map(str, s))}\n"
+            msg += f"\n✨ Chúc Đại ca may mắn phát tài!"
+
+            requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": msg,
+                "parse_mode": "HTML"
+            })
         return True
     except Exception as e:
         print(f"❌ Lỗi khi mua vé tự động: {e}")
@@ -396,7 +382,26 @@ def stats_page():
                           next_id_55=next_id_55,
                           next_id_45=next_id_45)
 
+def init_scheduler():
+    scheduler = BackgroundScheduler(timezone=vn_tz)
+    # Tự động mua vé lúc 8:30 sáng
+    scheduler.add_job(auto_buy_job, 'cron', hour=8, minute=30)
+    # Tự động dò kết quả lúc 18:45 chiều (quay lúc 18:00-18:30)
+    scheduler.add_job(check_results_job, 'cron', hour=18, minute=45)
+    # Ping để giữ server thức (Koyeb free)
+    scheduler.add_job(lambda: requests.get(f"{request.url_root if request else 'http://localhost:5000'}/health"), 'interval', minutes=15)
+    scheduler.start()
+    print("⏰ Scheduler started successfully (VN Time).")
+
+@app.route('/health')
+def health():
+    return "OK", 200
+
 if __name__ == '__main__':
-    # Koyeb cung cấp biến PORT tự động, mình nên dùng nó để linh hoạt
+    # Khởi động Scheduler một lần duy nhất
+    # Tránh chạy 2 lần khi Flask dùng reloader
+    if os.environ.get('WERKZEUG_RUN_MAIN') == 'true' or not app.debug:
+        init_scheduler()
+        
     port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port, use_reloader=False)

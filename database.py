@@ -71,12 +71,17 @@ def update_config(daily_limit=None, auto_buy_count=None):
         system_config.update_one({"type": "admin_config"}, {"$set": update_data}, upsert=True)
 
 def save_played_ticket(chat_id, game_type, numbers, draw_id=None, is_auto=False):
+    import pytz
+    vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+    now_vn = datetime.now(vn_tz)
+    
     played_tickets.insert_one({
         "chat_id": chat_id,
         "game_type": game_type,
         "draw_id": draw_id,
         "numbers": sorted([int(n) for n in numbers]),
         "played_at": datetime.now(),
+        "buy_date_vn": now_vn.strftime("%Y-%m-%d"),
         "checked": False,
         "is_win": False,
         "is_auto": is_auto
