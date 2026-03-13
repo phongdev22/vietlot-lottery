@@ -70,10 +70,11 @@ def update_config(daily_limit=None, auto_buy_count=None):
     if update_data:
         system_config.update_one({"type": "admin_config"}, {"$set": update_data}, upsert=True)
 
-def save_played_ticket(chat_id, game_type, numbers, is_auto=False):
+def save_played_ticket(chat_id, game_type, numbers, draw_id=None, is_auto=False):
     played_tickets.insert_one({
         "chat_id": chat_id,
         "game_type": game_type,
+        "draw_id": draw_id,
         "numbers": sorted([int(n) for n in numbers]),
         "played_at": datetime.now(),
         "checked": False,
@@ -137,3 +138,34 @@ def save_prediction(game_type, draw_id, numbers):
 
 def get_prediction(game_type, draw_id):
     return ai_predictions.find_one({"game_type": game_type, "draw_id": draw_id})
+
+def get_target_draw_id(game_type):
+    from datetime import datetime
+    import pytz
+    vn_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+    
+    latest = get_latest_draw(game_type)
+    if not latest:
+        return 1
+    
+    now_vn = datetime.now(vn_tz)
+    today_str = now_vn.strftime("%d/%m/%Y")
+    
+    # Nếu trong DB đã có kết quả ngày hôm nay, thì chắc chắn là kỳ tiếp theo (+1)
+    if latest.get('draw_date') == today_str:
+        return latest['draw_id'] + 1
+        
+    # Xác định xem hôm nay có phải ngày quay của game này không (theo rule của Đại ca)
+    day = now_vn.weekday()
+    is_draw_day = False
+    if game_type == "6/45" and day in [0, 2, 4, 6]:
+        is_draw_day = True
+    elif game_type == "6/55" and day in [1, 3, 5]:
+        is_draw_day = True
+
+    # Nếu đúng ngày quay và đã sau 18h (đang/đã quay), thì ghi cho kỳ tiếp theo nữa
+    if is_draw_day and now_vn.hour >= 18:
+        return latest['draw_id'] + 2
+        
+    # Các trường hợp còn lại là kỳ kế tiếp
+    return latest['draw_id'] + 1

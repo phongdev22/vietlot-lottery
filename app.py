@@ -5,7 +5,8 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from database import (
     get_all_history, get_latest_draw, get_config, update_config, 
     save_draw_result, get_unpushed_tickets, mark_ticket_checked, 
-    get_prediction, draw_history, bot_users, played_tickets, save_played_ticket
+    get_prediction, draw_history, bot_users, played_tickets, save_played_ticket,
+    get_target_draw_id, save_prediction
 )
 from analytics import calculate_stats, get_complex_stats, get_ai_lucky_numbers
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -210,6 +211,8 @@ def auto_buy_job():
         game_type = "6/45"
     else: # Thứ 3, 5, 7 là 6/55
         game_type = "6/55"
+    
+    target_draw_id = get_target_draw_id(game_type)
 
     # Kiểm tra xem hôm nay ĐÃ MUA TỰ ĐỘNG chưa
     today_start = datetime.combine(now_vn.date(), dtime.min).replace(tzinfo=vn_tz)
@@ -240,10 +243,9 @@ def auto_buy_job():
 
     bought_sets = []
     try:
-        from analytics import get_ai_lucky_numbers
         for _ in range(actual_buy):
             nums = get_ai_lucky_numbers(game_type, "balanced")
-            save_played_ticket(chat_id, game_type, nums, is_auto=True)
+            save_played_ticket(chat_id, game_type, nums, draw_id=target_draw_id, is_auto=True)
             bought_sets.append(nums)
         
         # Gửi thông báo tổng hợp qua Telegram
@@ -277,13 +279,27 @@ scheduler.start()
 @app.route('/')
 @login_required
 def index():
+    now_vn = datetime.now(vn_tz)
+    day = now_vn.weekday() # 0=Mon, 6=Sun
+    
+    # User's rule: 2 4 6 CN (0 2 4 6) -> 6/45, 3 5 7 (1 3 5) -> 6/55
+    show_45 = day in [0, 2, 4, 6]
+    show_55 = day in [1, 3, 5]
+
     latest_55 = get_latest_draw("6/55")
     latest_45 = get_latest_draw("6/45")
     stats_55 = calculate_stats("6/55")
     stats_45 = calculate_stats("6/45")
     config = get_config()
-    from database import played_tickets
-    recent_tickets = list(played_tickets.find().sort("played_at", -1).limit(10))
+    
+    # Pagination for tickets
+    page = request.args.get('page', 1, type=int)
+    per_page = 10
+    total_tickets = played_tickets.count_documents({})
+    total_pages = (total_tickets + per_page - 1) // per_page
+    if total_pages == 0: total_pages = 1
+    
+    recent_tickets = list(played_tickets.find().sort("played_at", -1).skip((page - 1) * per_page).limit(per_page))
     
     return render_template('index.html', 
                           latest_55=latest_55, 
@@ -291,7 +307,11 @@ def index():
                           stats_55=stats_55,
                           stats_45=stats_45,
                           config=config,
-                          tickets=recent_tickets)
+                          tickets=recent_tickets,
+                          show_45=show_45,
+                          show_55=show_55,
+                          page=page,
+                          total_pages=total_pages)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -316,26 +336,10 @@ def logout():
 @app.route('/settings', methods=['POST'])
 @login_required
 def settings():
-    limit = request.form.get('daily_limit', type=int)
     auto_count = request.form.get('auto_buy_count', type=int)
-    if limit or auto_count:
-        update_config(daily_limit=limit, auto_buy_count=auto_count)
+    if auto_count is not None:
+        update_config(auto_buy_count=auto_count)
         flash('Cấu hình đã được cập nhật, Đại ca!', 'success')
-    return redirect(url_for('index'))
-
-@app.route('/manual_buy')
-@login_required
-def manual_buy():
-    """Trigger mua vé thủ công ngay lập tức"""
-    result = auto_buy_job()
-    if result == "ALREADY_BOUGHT":
-        flash('Hôm nay hệ thống đã tự động mua vé rồi, Đại ca không cần mua thêm đâu!', 'warning')
-    elif result == "LIMIT_REACHED":
-        flash('Đại ca đã đạt giới hạn số vé trong ngày rồi ạ.', 'danger')
-    elif result:
-        flash('Em đã mua vé may mắn cho Đại ca rồi nhé! Check Telegram nha.', 'success')
-    else:
-        flash('Có lỗi xảy ra hoặc chưa có ai đăng ký Bot Telegram, Đại ca kiểm tra lại nhé.', 'danger')
     return redirect(url_for('index'))
 
 @app.route('/manual_check')
@@ -365,9 +369,7 @@ def stats_page():
     prediction_55 = get_prediction("6/55", next_id_55)
     if not prediction_55:
         # Generate and save new prediction if not exists
-        from analytics import get_ai_lucky_numbers
         pred_nums = get_ai_lucky_numbers("6/55", "balanced")
-        from database import save_prediction
         save_prediction("6/55", next_id_55, pred_nums)
         prediction_55 = {"numbers": pred_nums, "draw_id": next_id_55}
 
@@ -381,7 +383,6 @@ def stats_page():
         save_prediction("6/45", next_id_45, pred_nums)
         prediction_45 = {"numbers": pred_nums, "draw_id": next_id_45}
 
-    from analytics import calculate_stats
     simple_55 = calculate_stats("6/55")
     simple_45 = calculate_stats("6/45")
 

@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 from analytics import get_ai_lucky_numbers, calculate_stats
-from database import get_latest_draw
 
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -27,7 +26,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     
     # Register user to database
-    from database import register_user
     register_user(chat_id, user.username, user.first_name)
     
     keyboard = [
@@ -62,7 +60,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='HTML'
     )
 
-from database import get_config, save_played_ticket, played_tickets
+from database import (
+    get_config, save_played_ticket, played_tickets, get_target_draw_id,
+    register_user, get_latest_draw
+)
 from datetime import datetime, time as dtime
 
 async def auto_pick_tickets(update: Update, context: ContextTypes.DEFAULT_TYPE, game_type=None):
@@ -88,7 +89,8 @@ async def auto_pick_tickets(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         return
 
     nums = get_ai_lucky_numbers(game_type, "balanced")
-    save_played_ticket(chat_id, game_type, nums)
+    target_draw_id = get_target_draw_id(game_type)
+    save_played_ticket(chat_id, game_type, nums, draw_id=target_draw_id)
     
     await update.effective_chat.send_message(
         f"✅ <b>Đã tự động chọn vé {game_type} cho Đại ca:</b>\n\n"
@@ -140,7 +142,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await auto_pick_tickets(update, context)
 
     elif query.data == 'manual_buy':
-        # Import and call auto_buy_job from app.py
         from app import auto_buy_job
         result = auto_buy_job()
         
@@ -196,7 +197,8 @@ async def manual_pick(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat_id = update.effective_chat.id
     nums.sort()
-    save_played_ticket(chat_id, game_type, nums)
+    target_draw_id = get_target_draw_id(game_type)
+    save_played_ticket(chat_id, game_type, nums, draw_id=target_draw_id)
     
     await update.effective_chat.send_message(
         f"✅ <b>Đã lưu vé TỰ CHỌN {game_type} cho Đại ca:</b>\n\n"

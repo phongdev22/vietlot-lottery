@@ -222,16 +222,11 @@
             <h2 style="color: var(--secondary)">⚙️ Cấu hình hệ thống</h2>
             <form action="/settings" method="POST" style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
                 <div>
-                    <label style="font-size: 0.9rem; color: var(--text-dim)">Số vé tối đa mỗi ngày:</label><br>
-                    <input type="number" name="daily_limit" value="{{ config.daily_limit }}" style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 8px 12px; border-radius: 8px; width: 100px; margin-top: 5px;">
-                </div>
-                <div>
                     <label style="font-size: 0.9rem; color: var(--text-dim)">Vé tự động mỗi sáng:</label><br>
                     <input type="number" name="auto_buy_count" value="{{ config.auto_buy_count }}" style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 8px 12px; border-radius: 8px; width: 100px; margin-top: 5px;">
                 </div>
                 <button type="submit" style="background: var(--secondary); color: #000; border: none; padding: 10px 25px; border-radius: 12px; font-weight: 600; cursor: pointer; margin-top: 15px;">Lưu cấu hình</button>
                 <div style="margin-top: 15px; display: flex; gap: 10px;">
-                    <a href="/manual_buy" style="background: var(--primary); color: #fff; text-decoration: none; padding: 10px 20px; border-radius: 12px; font-weight: 600; font-size: 0.9rem;">🎲 Mua vé ngay</a>
                     <a href="/manual_check" style="background: var(--accent); color: #fff; text-decoration: none; padding: 10px 20px; border-radius: 12px; font-weight: 600; font-size: 0.9rem;">🔍 Dò số ngay</a>
                 </div>
                 
@@ -249,6 +244,7 @@
 
         <div class="grid">
             <!-- Power 6/55 Card -->
+            {% if show_55 %}
             <div class="card">
                 <div class="game-header">
                     <h2>Power 6/55 <span class="ai-badge">AI Active</span></h2>
@@ -277,8 +273,10 @@
                     </div>
                 </div>
             </div>
+            {% endif %}
 
             <!-- Mega 6/45 Card -->
+            {% if show_45 %}
             <div class="card">
                 <div class="game-header">
                     <h2>Mega 6/45 <span class="ai-badge">AI Active</span></h2>
@@ -304,16 +302,25 @@
                     </div>
                 </div>
             </div>
+            {% endif %}
         </div>
 
         <!-- Recent Tickets Table -->
         <div class="card" style="margin-top: 40px;">
-            <h2>🎟 Vé đã chơi gần đây</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>🎟 Vé đã chơi gần đây</h2>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <a href="/?page={{ page - 1 }}" class="badge" style="text-decoration: none; background: {{ 'rgba(255,255,255,0.1)' if page > 1 else 'rgba(255,255,255,0.05)' }}; color: {{ 'white' if page > 1 else 'var(--text-dim)' }}; pointer-events: {{ 'auto' if page > 1 else 'none' }}">Trước</a>
+                    <span style="font-size: 0.9rem; color: var(--text-dim)">Trang {{ page }} / {{ total_pages }}</span>
+                    <a href="/?page={{ page + 1 }}" class="badge" style="text-decoration: none; background: {{ 'rgba(255,255,255,0.1)' if page < total_pages else 'rgba(255,255,255,0.05)' }}; color: {{ 'white' if page < total_pages else 'var(--text-dim)' }}; pointer-events: {{ 'auto' if page < total_pages else 'none' }}">Sau</a>
+                </div>
+            </div>
             <table class="stats-table">
                 <thead>
                     <tr>
                         <th>Ngày chơi</th>
                         <th>Loại vé</th>
+                        <th>Kỳ</th>
                         <th>Bộ số</th>
                         <th>Kết quả</th>
                     </tr>
@@ -324,6 +331,7 @@
                         <tr>
                             <td>{{ ticket.played_at.strftime('%d/%m/%Y %H:%M') }}</td>
                             <td><span class="badge {{ 'mega' if ticket.game_type == '6/45' else '' }}">{{ ticket.game_type }}</span></td>
+                            <td><span style="color: var(--secondary); font-weight: 600;">#{{ ticket.draw_id if ticket.draw_id else '---' }}</span></td>
                             <td><strong>{{ ticket.numbers | join(' - ') }}</strong></td>
                             <td>
                                 {% if not ticket.checked %}
@@ -338,13 +346,22 @@
                         {% endfor %}
                     {% else %}
                         <tr>
-                            <td colspan="4" style="text-align: center; color: var(--text-dim); padding: 40px;">
+                            <td colspan="5" style="text-align: center; color: var(--text-dim); padding: 40px;">
                                 Đại ca chưa chơi vé nào. Dùng Bot hoặc /pick để chọn số nha!
                             </td>
                         </tr>
                     {% endif %}
                 </tbody>
             </table>
+
+            <div style="display: flex; justify-content: center; margin-top: 30px; gap: 15px;">
+                {% if page > 1 %}
+                    <a href="/?page={{ page - 1 }}" style="color: var(--text); text-decoration: none; border: 1px solid var(--glass-border); padding: 8px 20px; border-radius: 12px; font-size: 0.9rem;">← Trang trước</a>
+                {% endif %}
+                {% if page < total_pages %}
+                    <a href="/?page={{ page + 1 }}" style="color: var(--text); text-decoration: none; border: 1px solid var(--glass-border); padding: 8px 20px; border-radius: 12px; font-size: 0.9rem;">Trang tiếp →</a>
+                {% endif %}
+            </div>
         </div>
 
         <div class="footer">
